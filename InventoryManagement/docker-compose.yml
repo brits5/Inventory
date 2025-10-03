@@ -8,7 +8,7 @@ services:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=Password123!
     ports:
-      - "1434:1433"
+      - "1433:1433"
     volumes:
       - sqldata:/var/opt/mssql
       - ./scripts:/scripts
@@ -35,6 +35,38 @@ services:
       /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P Password123! -C -i /scripts/init-database.sql
       "
     restart: "no"
+
+  product-service:
+    build:
+      context: ./src/ProductService
+      dockerfile: Dockerfile
+    container_name: product-service
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=InventoryDB;User Id=sa;Password=Password123!;TrustServerCertificate=True
+    ports:
+      - "5001:80"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - inventory-network
+
+  transaction-service:
+    build:
+      context: ./src/TransactionService
+      dockerfile: Dockerfile
+    container_name: transaction-service
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=InventoryDB;User Id=sa;Password=Password123!;TrustServerCertificate=True
+      - Services__ProductServiceUrl=http://product-service:80
+    ports:
+      - "5002:80"
+    depends_on:
+      - product-service
+    networks:
+      - inventory-network
 
 volumes:
   sqldata:
