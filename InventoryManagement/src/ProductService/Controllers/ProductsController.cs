@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using ProductService.Models.DTOs;
 using ProductService.Models.Entities;
 using ProductService.Repositories;
+using ProductService.Services;
 
 namespace ProductService.Controllers
 {
@@ -10,10 +11,12 @@ namespace ProductService.Controllers
     public class ProductsController : ControllerBase
     {
         private readonly IProductRepository _repository;
+        private readonly IFileService _fileService;
 
-        public ProductsController(IProductRepository repository)
+        public ProductsController(IProductRepository repository, IFileService fileService)
         {
             _repository = repository;
+            _fileService = fileService;
         }
 
         [HttpGet]
@@ -53,14 +56,27 @@ namespace ProductService.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<ProductDto>> Create(CreateProductDto dto)
+        public async Task<ActionResult<ProductDto>> Create([FromForm] CreateProductDto dto, [FromForm] IFormFile? image)
         {
+            string imageUrl = null;
+            if (image != null)
+            {
+                try
+                {
+                    imageUrl = await _fileService.SaveImageAsync(image);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return BadRequest(ex.Message);
+                }
+            }
+
             var product = new Product
             {
                 Name = dto.Name,
                 Description = dto.Description,
                 Category = dto.Category,
-                ImageUrl = dto.ImageUrl,
+                ImageUrl = imageUrl ?? dto.ImageUrl,
                 Price = dto.Price,
                 Stock = dto.Stock
             };
@@ -80,15 +96,36 @@ namespace ProductService.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<ProductDto>> Update(int id, UpdateProductDto dto)
+        public async Task<ActionResult<ProductDto>> Update(int id, [FromForm] UpdateProductDto dto, [FromForm] IFormFile? image)
         {
             var product = await _repository.GetByIdAsync(id);
             if (product == null) return NotFound();
 
+            string oldImageUrl = product.ImageUrl;
+
+            if (image != null)
+            {
+                try
+                {
+                    product.ImageUrl = await _fileService.SaveImageAsync(image);
+                    if (!string.IsNullOrEmpty(oldImageUrl))
+                    {
+                        _fileService.DeleteImage(oldImageUrl);
+                    }
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return BadRequest(ex.Message);
+                }
+            }
+            else if (!string.IsNullOrEmpty(dto.ImageUrl))
+            {
+                product.ImageUrl = dto.ImageUrl;
+            }
+
             product.Name = dto.Name;
             product.Description = dto.Description;
             product.Category = dto.Category;
-            product.ImageUrl = dto.ImageUrl;
             product.Price = dto.Price;
             product.Stock = dto.Stock;
 
@@ -109,8 +146,15 @@ namespace ProductService.Controllers
         [HttpDelete("{id}")]
         public async Task<ActionResult> Delete(int id)
         {
+            var product = await _repository.GetByIdAsync(id);
+            if (product == null) return NotFound();
+
+            if (!string.IsNullOrEmpty(product.ImageUrl))
+            {
+                _fileService.DeleteImage(product.ImageUrl);
+            }
+
             var result = await _repository.DeleteAsync(id);
-            if (!result) return NotFound();
             return NoContent();
         }
 

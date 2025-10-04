@@ -95,5 +95,42 @@ namespace TransactionService.Controllers
 
             return Ok(transactionDtos);
         }
+
+        [HttpGet("productAll")]
+        public async Task<ActionResult<IEnumerable<TransactionDto>>> GetAll(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate,
+        [FromQuery] string? type)
+        {
+            var transactions = await _repository.GetAllAsync(startDate, endDate, type);
+
+            var productIds = transactions.Select(t => t.ProductId).Distinct();
+            var productDict = new Dictionary<int, ProductDto>();
+
+            foreach (var productId in productIds)
+            {
+                var product = await _productClient.GetProductAsync(productId);
+                if (product != null)
+                {
+                    productDict[productId] = product;
+                }
+            }
+
+            var transactionDtos = transactions.Select(t => new TransactionDto
+            {
+                Id = t.Id,
+                Date = t.Date,
+                Type = t.Type,
+                ProductId = t.ProductId,
+                ProductName = productDict.ContainsKey(t.ProductId) ? productDict[t.ProductId].Name : "Desconocido",
+                ProductStock = productDict.ContainsKey(t.ProductId) ? productDict[t.ProductId].Stock : 0,
+                Quantity = t.Quantity,
+                UnitPrice = t.UnitPrice,
+                TotalPrice = t.TotalPrice,
+                Details = t.Details
+            });
+
+            return Ok(transactionDtos);
+        }
     }
 }

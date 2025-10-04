@@ -1,7 +1,7 @@
-// ProductService/Program.cs
 using Microsoft.EntityFrameworkCore;
 using ProductService.Data;
 using ProductService.Repositories;
+using ProductService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +13,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<IFileService, FileService>();
 
 builder.Services.AddCors(options =>
 {
@@ -26,7 +27,7 @@ builder.Services.AddCors(options =>
 
 builder.WebHost.UseUrls("http://*:80");
 var app = builder.Build();
-
+app.UseStaticFiles();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
